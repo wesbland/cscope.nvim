@@ -1,8 +1,14 @@
 import neovim
 import os
-import ConfigParser
+import sys
 import subprocess
-from StringIO import StringIO
+if sys.version_info > (3, 0):
+    import configparser
+    ConfigParser = configparser
+    from io import StringIO
+else:
+    import ConfigParser
+    from StringIO import StringIO
 
 
 @neovim.plugin
@@ -10,6 +16,7 @@ class CScope(object):
 
     def __init__(self, nvim):
         self.nvim = nvim
+        self._keys_mapped = False
 
     def __parse_config(self):
         self.config = dict()
@@ -31,7 +38,7 @@ class CScope(object):
                     self.project_conf,
                     str(e)))
 
-        if not os.path.exists(self.config['project_path']):
+        if not os.path.isdir(self.config['project_path']):
             return (
                 False, "Project path: '{0}' does not exist".format(
                     self.config['project_path']))
@@ -112,6 +119,9 @@ class CScope(object):
 
     @neovim.command('CScopeMapKeys', range='', nargs='*', sync=False)
     def cscope_map_keys_handler(self, args, range):
+        if self._keys_mapped:
+            return
+
         self.nvim.command(
             'nmap <unique> <C-\>s :cs find s <C-R>=expand("<cword>")<CR><CR>')
         self.nvim.command(
@@ -162,6 +172,7 @@ class CScope(object):
             'nmap <unique> <C-Space><C-Space>d :vert scs find d <C-R>=expand("<cword>")<CR><CR>')
         self.nvim.command(
             'imap <C-@> <C-Space>')
+        self._keys_mapped = True
 
     @neovim.command('CScopeUpdate', range='', nargs='*', sync=False)
     def cscope_update_files_handler(self, args, range):
@@ -184,12 +195,12 @@ class CScope(object):
         self.cscope_connection_ready = False
 
         # setup cscope base dir
-        if not 'cscope_dir' in self.nvim.vars:
+        if 'cscope_dir' not in self.nvim.vars:
             self.nvim.vars['cscope_dir'] = '~/.cscope'
         self.cscope_dir = os.path.expanduser(self.nvim.vars['cscope_dir'])
 
         # get default configuration name
-        if not 'cscope_config' in self.nvim.vars:
+        if 'cscope_config' not in self.nvim.vars:
             self.nvim.vars['cscope_config'] = 'cscope.cfg'
 
         # setup project configuration
@@ -202,8 +213,12 @@ class CScope(object):
                         args[0]))
                 return
         else:
-            if os.path.isfile(os.path.join(os.getcwd(), self.nvim.vars['cscope_config'])):
-                self.project_conf = os.path.join(os.getcwd(), self.nvim.vars['cscope_config'])
+            if os.path.isfile(
+                os.path.join(
+                    os.getcwd(),
+                    self.nvim.vars['cscope_config'])):
+                self.project_conf = os.path.join(
+                    os.getcwd(), self.nvim.vars['cscope_config'])
             else:
                 self.nvim.command(
                     'echo "Couldn\'t start CScope: \'cscope.py\' does not exist."')
